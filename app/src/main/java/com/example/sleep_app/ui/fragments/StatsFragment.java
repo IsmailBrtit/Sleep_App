@@ -1,4 +1,6 @@
 package com.example.sleep_app.ui.fragments;
 
-public class StatsFragment {
+import androidx.fragment.app.Fragment;
+
+public class StatsFragment extends Fragment {
 }
