@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Sleep_App</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+
+    <string name="server_client_id">946822591687-febk2okuujj82u7t2afqi4a3d4oqacni.apps.googleusercontent.com</string>
+    <string name="logout">Se déconnecter</string>
+
+    <string name="caffeine_question">Caffeine intake?</string>
+    <string name="caffeine_none">No</string>
+    <string name="caffeine_little">A little</string>
+    <string name="caffeine_lot">A lot</string>
+
+    <string name="stress_question">Stress level today?</string>
+    <string name="stress_calm">Calm</string>
+    <string name="stress_normal">Normal</string>
+    <string name="stress_stressful">Stressful</string>
+
+    <string name="exercise_question">Did you exercise today?</string>
+    <string name="exercise_yes">Yes</string>
+    <string name="exercise_no">No</string>
+
+
+    <string name="extra_stats_coming_soon">(Coming soon) Trends: Stress, Caffeine, Activity</string>
+
+</resources>
+

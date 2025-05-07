@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946822591687",
+    "project_id": "mobile-cc033",
+    "storage_bucket": "mobile-cc033.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946822591687:android:e3110dc8fa1c628f3cbae2",
+        "android_client_info": {
+          "package_name": "com.example.sleep_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA08OeqYadnnmkjpeJzc3pXHQlD1xonji8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
