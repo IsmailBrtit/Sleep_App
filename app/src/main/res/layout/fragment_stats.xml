@@ -1,7 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layout_stats"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#FAFAFA"
+    tools:context=".ui.fragments.StatsFragment">
 
-</LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center_horizontal">
+
+        <!-- Sleep Tracker Title -->
+        <TextView
+            android:id="@+id/tvStatsTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Weekly Sleep Tracker"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Sleep Chart -->
+        <com.github.mikephil.charting.charts.BarChart
+            android:id="@+id/sleepChart"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Habits Title -->
+        <TextView
+            android:id="@+id/tvHabitsTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Habit Summary (Past Week)"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Habits Chart -->
+        <com.github.mikephil.charting.charts.BarChart
+            android:id="@+id/habitsChart"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Optional Footer Text -->
+        <TextView
+            android:id="@+id/tvExtraStats"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="(Coming soon) Trends: Stress, Caffeine, Activity"
+            android:textSize="14sp"
+            android:textColor="@color/darker_gray" />
+
+    </LinearLayout>
+</ScrollView>

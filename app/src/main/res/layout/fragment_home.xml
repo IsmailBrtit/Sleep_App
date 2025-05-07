@@ -87,6 +87,22 @@
             android:layout_marginTop="20dp"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/tvRecommendation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:padding="10dp"
+                android:background="@drawable/button_colour"
+                android:text="Recommandation personnalisée ici"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="italic"
+                android:gravity="center" />
+
             <LinearLayout
                 android:id="@+id/ele_container_1"
                 android:layout_width="match_parent"
@@ -116,7 +132,7 @@
                             android:layout_height="wrap_content"
                             android:padding="10dp"
                             android:paddingEnd="16dp"
-                            android:text="Sleep Score"
+                            android:text="Sleep Quality"
                             android:textColor="#AAA9A9"
                             android:textSize="15sp" />
 

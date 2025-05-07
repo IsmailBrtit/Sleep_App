@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- Caffeine -->
+        <TextView
+            android:text="@string/caffeine_question"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <RadioGroup
+            android:id="@+id/caffeineGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <RadioButton
+                android:id="@+id/caffeineNone"
+                android:text="@string/caffeine_none"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+            <RadioButton
+                android:id="@+id/caffeineLittle"
+                android:text="@string/caffeine_little"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+            <RadioButton
+                android:id="@+id/caffeineLot"
+                android:text="@string/caffeine_lot"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+        </RadioGroup>
+
+        <!-- Stress -->
+        <TextView
+            android:text="@string/stress_question"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <RadioGroup
+            android:id="@+id/stressGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <RadioButton
+                android:id="@+id/stressCalm"
+                android:text="@string/stress_calm"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+            <RadioButton
+                android:id="@+id/stressNormal"
+                android:text="@string/stress_normal"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+            <RadioButton
+                android:id="@+id/stressStressful"
+                android:text="@string/stress_stressful"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+        </RadioGroup>
+
+        <!-- Exercise -->
+        <TextView
+            android:text="@string/exercise_question"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <RadioGroup
+            android:id="@+id/exerciseGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <RadioButton
+                android:id="@+id/exerciseYes"
+                android:text="@string/exercise_yes"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+            <RadioButton
+                android:id="@+id/exerciseNo"
+                android:text="@string/exercise_no"
+                android:minHeight="48dp"
+                android:padding="12dp"/>
+        </RadioGroup>
+
+    </LinearLayout>
+</ScrollView>

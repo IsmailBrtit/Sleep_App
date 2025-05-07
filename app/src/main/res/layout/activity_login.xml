@@ -1,7 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/window_background"
+    tools:context=".LoginActivity">
 
-</LinearLayout>
+
+    <ImageView
+        android:layout_width="250dp"
+        android:layout_height="209dp"
+        android:layout_centerInParent="true"
+        android:src="@drawable/logo"
+        android:contentDescription="Logo de l'application"
+        />
+    <ImageView
+        android:id="@+id/gotoGoogleBtn"
+        android:layout_width="250dp"
+        android:layout_height="100dp"
+        android:src="@drawable/googlesignin"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="50dp"
+        android:contentDescription="Bouton Google Sign-In"
+        />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="30dp"
+        android:fontFamily="@font/amaranth"
+        android:text="Sleepometer"
+        android:textColor="@color/white"
+        android:textSize="40sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="77dp"
+        android:textSize="18sp"
+        android:fontFamily="@font/architects_daughter"
+        android:text="Track Your Sleep"
+        android:textColor="#043268"
+        android:textStyle="bold" />
+
+
+</RelativeLayout>

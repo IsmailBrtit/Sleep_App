@@ -9,6 +9,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import android.content.Intent;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.example.sleep_app.databinding.ActivityMainBinding;
@@ -18,6 +19,8 @@ import com.example.sleep_app.ui.fragments.StatsFragment;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.ismaeldivita.chipnavigation.ChipNavigationBar;
 //import java.util.concurrent.Executor;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -27,14 +30,21 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        mAuth = FirebaseAuth.getInstance();
+        if (mAuth.getCurrentUser() == null) {
+            // Redirige vers LoginActivity si non connecté
+            Intent intent = new Intent(this, LoginActivity.class);
+            startActivity(intent);
+            finish();
+            return;
+        }
+
+
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        mAuth = FirebaseAuth.getInstance();
-        if (mAuth.getCurrentUser() != null) {
-            String currentUserID = mAuth.getCurrentUser().getUid();
-        }
 
         binding.bottomNavBar.setItemSelected(R.id.home, true);
         getSupportFragmentManager().beginTransaction()

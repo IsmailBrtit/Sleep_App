@@ -15,9 +15,20 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
+import com.google.firebase.firestore.FirebaseFirestore;
+import java.util.HashMap;
+import android.app.NotificationManager;
+import android.content.Context;
+import android.content.Intent;
+import android.provider.Settings;
+import android.os.Build;
+import com.google.firebase.firestore.SetOptions;
+
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -29,7 +40,6 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.squareup.picasso.Picasso;
@@ -39,6 +49,7 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import com.example.sleep_app.ProfileActivity;
 import com.example.sleep_app.R;
@@ -52,9 +63,7 @@ public class HomeFragment extends Fragment {
     Thread thread;
     String userID;
     SharedPreferences sharedPreferences;
-    DatabaseReference reference;
     ProgressDialog progressDialog;
-    DatabaseReference Rootref;
     volatile boolean countSec = true;
 
     TimePicker sleepMilli,wakeMilli;
@@ -68,14 +77,16 @@ public class HomeFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_home,container,false);
         binding = FragmentHomeBinding.bind(view);
 
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
         FirebaseAuth mAuth = FirebaseAuth.getInstance();
         userID = Objects.requireNonNull(mAuth.getCurrentUser()).getUid();
-        Rootref = FirebaseDatabase.getInstance ().getReference ().child("Users").child(userID);
         sharedPreferences = getContext().getSharedPreferences("MySharedPref",getContext().MODE_PRIVATE);
 
         setSleepTime();
         setWakeTime();
         avg_sleep();
+        updateRecommendation();
+
 
 
 
@@ -92,8 +103,6 @@ public class HomeFragment extends Fragment {
             }
         });
 
-
-        reference = FirebaseDatabase.getInstance().getReference("Users");
 
         dataRetriveFromFirebase();
 
@@ -124,43 +133,72 @@ public class HomeFragment extends Fragment {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
-                if (sharedPreferences.getString("name","").equals("")){
-                    SharedPreferences.Editor myEdit = sharedPreferences.edit();
+                if (sharedPreferences.getString("name","").equals("")) {
+                    showPreSleepHabitDialog(() -> {
+                        SharedPreferences.Editor myEdit = sharedPreferences.edit();
+                        String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+
+                        myEdit.putString("name", "active");
+                        myEdit.putString("age", timeStamp);
+                        myEdit.putString("sleepAt", timeStamp);
+                        myEdit.putString("wakeUp", "");
+
+                        myEdit.commit();
+
+                        setSleepTime();
+                        countSec = true;
+                        toggleDoNotDisturb(true);// ENABLE DND when starting sleep
+                        getOperationLocally();
+                    });
+                }
+                else {
+
+
                     String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-
-                    myEdit.putString("name", "active");
-                    myEdit.putString("age", timeStamp);
-                    myEdit.putString("sleepAt", timeStamp);
-                    myEdit.putString("wakeUp", "");
-
-                    myEdit.commit();
-
-                    setSleepTime();
-                    countSec = true;
-                    getOperationLocally();
-                }else {
-
-
-                    String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+                    String sleepAt = sharedPreferences.getString("sleepAt", "");
 
                     Timestamp date_1 = stringToTimestamp(sharedPreferences.getString("age",""));
                     Timestamp date_2 = stringToTimestamp(timeStamp);
                     long milliseconds = date_2.getTime() - date_1.getTime();
 
                     String today_date = new SimpleDateFormat("dd-M-yyyy").format(new Date());
+                    String todayDateFirestore = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
 
                     upDateWinNode(milliseconds,today_date);
 
+                    long hours = (milliseconds / 1000) / 3600;
+                    long minutes = ((milliseconds / 1000) / 60) % 60;
+                    String duration = hours + "h " + minutes + "min";
 
+                    Map<String, Object> recordMap = new HashMap<>();
+                    recordMap.put("sleepAt", sleepAt);
+                    recordMap.put("wakeUp", timeStamp);
+                    recordMap.put("duration", duration);
+
+
+                    FirebaseFirestore.getInstance()
+                            .collection("Users")
+                            .document(userID)
+                            .collection("SleepRecords")
+                            .document(todayDateFirestore)
+                            .set(recordMap, SetOptions.merge())
+                            .addOnSuccessListener(unused -> {
+                                // Optional: Toast success
+                            })
+                            .addOnFailureListener(e -> {
+                                // Optional: Toast error
+                            });
+
+// ✅ Now clear shared prefs
                     SharedPreferences.Editor myEdit = sharedPreferences.edit();
-
                     myEdit.putString("name", null);
                     myEdit.putString("age", null);
                     myEdit.putString("wakeUp", timeStamp);
-
                     myEdit.commit();
+
                     setWakeTime();
                     countSec = false;
+                    toggleDoNotDisturb(false);// DISABLE DND when ending sleep
                     getOperationLocally();
                 }
             }
@@ -291,151 +329,40 @@ public class HomeFragment extends Fragment {
     }
 
     private void upDateWinNode(long milliseconds, String today_date) {
+        double sec = milliseconds / 1000.0;
+        double percentage = (sec / 86400.0) * 100.0;
+        double finalSec = Math.round(percentage * 100.0) / 100.0;
 
+        FirebaseFirestore.getInstance().collection("Users").document(userID).get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    String s = documentSnapshot.getString("7days");
+                    if (s == null) s = "0;0;0;0;0;0;0";
+                    String[] sp = s.split(";");
+                    String[] updated = new String[7];
 
-        Rootref.child("Win").addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    // Shift left
+                    for (int i = 1; i < 7; i++) {
+                        updated[i - 1] = sp[i];
+                    }
+                    updated[6] = String.valueOf(finalSec); // new value
 
-                int count = (int) snapshot.getChildrenCount();
+                    StringBuilder result = new StringBuilder();
+                    for (int i = 0; i < 6; i++) result.append(updated[i]).append(";");
+                    result.append(updated[6]);
 
+                    Map<String, Object> updateMap = new HashMap<>();
+                    updateMap.put("7days", result.toString());
 
-                if (!(snapshot.child(today_date).exists())){
-
-
-
-                    HashMap userMap=new HashMap();
-                    userMap.put("date",today_date);
-                    userMap.put("sleep",String.valueOf(milliseconds));
-
-                    Rootref.child("Win").child(today_date).updateChildren(userMap).addOnCompleteListener(new OnCompleteListener() {
-                        @Override
-                        public void onComplete(@NonNull Task task) {
-
-                            updateTheAVGData(today_date,"new",milliseconds);
-
-                        }
-                    });
-
-                }else{
-
-
-                    String string = snapshot.child(today_date).child("sleep").getValue().toString();
-                    double d = Double.parseDouble(string);
-                    d = d+milliseconds;
-
-
-                    HashMap userMap=new HashMap();
-                    userMap.put("date",today_date);
-                    userMap.put("sleep",String.valueOf(d));
-
-                    double finalD = d;
-                    Rootref.child("Win").child(today_date).updateChildren(userMap).addOnCompleteListener(new OnCompleteListener() {
-                        @Override
-                        public void onComplete(@NonNull Task task) {
-
-
-                            updateTheAVGData(today_date,"old", finalD);
-
-
-                        }
-                    });
-
-
-                }
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-
-            }
-        });
-
-
-
-
-
+                    FirebaseFirestore.getInstance().collection("Users")
+                            .document(userID)
+                            .update(updateMap)
+                            .addOnSuccessListener(aVoid -> {
+                                avg_sleep(); // update UI
+                                updateRecommendation(); // refresh rec
+                            });
+                });
     }
 
-    private void updateTheAVGData(String today_date, String old , double d) {
-
-        double sec = (d/1000);
-        sec = (float) sec/86400;
-        sec = sec*100;
-
-
-        double finalSec = Math.round(sec * 100.0) / 100.0;;
-
-
-        if (old.equals("new")){
-            Rootref.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot snapshot) {
-                    String s = snapshot.child("7days").getValue().toString();
-                    String[] fin  = new String[7];
-                    String[] sp = s.split(";");
-
-                    int i=1, j=0;
-                    int x = 0, y=0;
-                    while(i<7) {
-                        fin[j] = sp[i];
-                        i++;
-                        j++;
-                    }
-                    while(y<x){
-                        fin[j] = sp[i-1];
-                        j++;
-                        y++;
-                    }
-                    fin[fin.length-1] = String.valueOf(finalSec);
-
-
-                    String up = "";
-                    for(int iy=0; iy<6; iy++) {
-                        up+=fin[iy]+";";
-                    }
-                    up+=fin[fin.length-1];
-
-
-                    HashMap<String, Object> map = new HashMap<>();
-                    map.put("7days", up);
-                    Rootref.updateChildren ( map );
-
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-
-                }
-            });
-        }else{
-            Rootref.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot snapshot) {
-                    String s = snapshot.child("7days").getValue().toString();
-                    String[] sp = s.split(";");
-
-
-                    String up = "";
-                    for(int iy=0; iy<6; iy++) {
-                        up+=sp[iy]+";";
-                    }
-                    up+= String.valueOf(finalSec);
-
-
-                    HashMap<String, Object> map = new HashMap<>();
-                    map.put("7days", up);
-                    Rootref.updateChildren ( map );
-
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-
-                }
-            });
-        }
-    }
 
 
     private void getOperationLocally() {
@@ -502,100 +429,124 @@ public class HomeFragment extends Fragment {
     }
 
     private void dataRetriveFromFirebase() {
+        FirebaseFirestore.getInstance()
+                .collection("Users")
+                .document(userID)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        Users userprofile = documentSnapshot.toObject(Users.class);
 
-        reference.child(userID).addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                Users userprofile = snapshot.getValue(Users.class);
+                        if (userprofile != null) {
+                            String fullname = userprofile.name;
+                            if (fullname.contains(" ")) {
+                                fullname = fullname.substring(0, fullname.indexOf(" "));
+                            }
+                            binding.mainActUserName.setText(fullname + " !");
+                        }
 
-                if (userprofile != null) {
-                    String fullname = userprofile.name;
-
-                    if(fullname.contains(" ")){
-                        fullname = fullname.substring(0, fullname.indexOf(" "));
+                        Object pfpUrl = documentSnapshot.get("user_image");
+                        if (pfpUrl != null) {
+                            Picasso.get()
+                                    .load(pfpUrl.toString())
+                                    .placeholder(R.drawable.profile)
+                                    .error(R.drawable.profile)
+                                    .into(binding.userProfileImage);
+                        }
                     }
-
-                    binding.mainActUserName.setText(fullname+" !");
-
-
-                }
-
-                // Getting the url of profile picture
-                Object pfpUrl = snapshot.child("user_image").getValue();
-                if (pfpUrl != null) {
-                    // If the url is not null, then adding the image
-                    Picasso.get().load(pfpUrl.toString()).placeholder(R.drawable.profile)
-                            .error(R.drawable.profile)
-                            .into(binding.userProfileImage);
-                }
-
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(getContext(), "Cannot fetch data", Toast.LENGTH_SHORT).show();
-            }
-        });
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(getContext(), "Cannot fetch data", Toast.LENGTH_SHORT).show();
+                });
     }
 
     private void showDialog(){
         new AlertDialog.Builder(requireContext())
                 .setTitle("Sleep Score Card")
-                .setMessage("Excellent: 80-100\nGood: 60-80\nAverage: 40-60.")
-                .setNegativeButton("Ok",null)
+                .setMessage("Excellent: 85–100%\nGood: 70–85%\nAverage: 50–70%\nPoor: < 50% (sleep less than 4.5h)")
+                .setNegativeButton("OK", null)
                 .setIcon(android.R.drawable.ic_dialog_info)
                 .show();
     }
 
 
     //Avg Function
-    private void avg_sleep(){
-        Rootref.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                String fetch = snapshot.child("7days").getValue().toString();
-                String[] sp = fetch.split(";");
+    private void avg_sleep() {
+        FirebaseFirestore.getInstance().collection("Users")
+                .document(userID)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    String fetch = documentSnapshot.getString("7days");
+                    if (fetch == null) return;
+
+                    String[] sp = fetch.split(";");
+                    float sumPercentage = 0;
+                    for (int i = 0; i < 7; i++) {
+                        sumPercentage += Float.parseFloat(sp[i]);
+                    }
+
+                    float sleepScore = sumPercentage / 7f;
+                    if (sleepScore > 100f) sleepScore = 100f;
+
+                    // Convert back to hours just for display
+                    float avgHours = (sleepScore * 24f) / 100f;
+
+                    String reaction;
+                    if (sleepScore < 50) {
+                        reaction = "😴";
+                    } else if (sleepScore < 70) {
+                        reaction = "😐";
+                    } else if (sleepScore < 85) {
+                        reaction = "😊";
+                    } else {
+                        reaction = "😁";
+                    }
+
+                    int H = (int) avgHours;
+                    int M = Math.round((avgHours - H) * 60);
+                    String avgSleep = H + "hr " + M + "min";
+
+                    binding.sleepScoreDataEmoji.setText(reaction);
+                    binding.avgSleepDurationHrs.setText(avgSleep);
+                    binding.sleepScoreData.setText(String.format("%.1f %%", sleepScore));
+                });
+    }
 
 
-                float sum = 0;
-                for(int i=0;i<7;i++){
-                    sum+= Float.parseFloat(sp[i]);
-                }
 
-                //this is the percentage
+    private void updateRecommendation() {
+        FirebaseFirestore.getInstance().collection("Users")
+                .document(userID)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    String fetch = documentSnapshot.getString("7days");
+                    if (fetch == null) return;
 
-                sum = (float) sum/7;
-                int percentage = (int) sum;
-                String reaction="";
+                    String[] sp = fetch.split(";");
+                    float sumPercentage = 0;
+                    for (int i = 0; i < 7; i++) {
+                        sumPercentage += Float.parseFloat(sp[i]);
+                    }
 
-                if (0<= sum && sum <=20){
-                    reaction="😴";
-                }else if (20 < sum && sum <= 40){
-                    reaction="😪";
-                }else if (40 < sum && sum <= 60){
-                    reaction="😐";
-                }else if (60 < sum && sum <= 80){
-                    reaction="😊";
-                }else if (80< sum && sum <= 100){
-                    reaction="😁";
-                }
-                binding.sleepScoreDataEmoji.setText(reaction);
-                binding.sleepScoreData.setText(percentage+"%");
+                    float avgPercentage = sumPercentage / 7f;
+                    float avgHours = (avgPercentage * 24f) / 100f;
 
-                float hello = (sum*24)/100;
-                int Hours = (int) hello;
-                int temp_mnt = (int) ((hello - Math.floor( hello))*100) ;
-                int Minutes = (temp_mnt*60)/100;
+                    String recommendation;
+                    if (avgHours < 5) {
+                        recommendation = "Too little sleep. Try aiming for 7–9 hours daily.";
+                    } else if (avgHours < 7) {
+                        recommendation = "Getting closer. Try to improve sleep consistency.";
+                    } else if (avgHours <= 9) {
+                        recommendation = "Perfect! You're in the ideal sleep range.";
+                    } else if (avgHours <= 11) {
+                        recommendation = "Slightly oversleeping. Maintain a balanced routine.";
+                    } else {
+                        recommendation = "Too much sleep. Monitor your health if this persists.";
+                    }
 
-                String avgsleep = Hours+"hr "+Minutes+"min";
-                binding.avgSleepDurationHrs.setText(avgsleep);
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-
-            }
-        });
+                    binding.tvRecommendation.setText(recommendation);
+                })
+                .addOnFailureListener(e -> binding.tvRecommendation.setText("Unable to load recommendation."));
     }
 
 
@@ -613,4 +564,67 @@ public class HomeFragment extends Fragment {
         super.onDestroy();
         countSec = false;
     }
+
+    private void toggleDoNotDisturb(boolean enable) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            NotificationManager notificationManager = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+
+            if (!notificationManager.isNotificationPolicyAccessGranted()) {
+                // Ask user for permission
+                Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                startActivity(intent);
+                return;
+            }
+
+            if (enable) {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
+            } else {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
+            }
+        }
+    }
+
+    private void showPreSleepHabitDialog(Runnable onComplete) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_habits, null);
+        builder.setView(dialogView);
+
+        RadioGroup caffeineGroup = dialogView.findViewById(R.id.caffeineGroup);
+        RadioGroup stressGroup = dialogView.findViewById(R.id.stressGroup);
+        RadioGroup exerciseGroup = dialogView.findViewById(R.id.exerciseGroup);
+
+        builder.setTitle("Today's Habits")
+                .setPositiveButton("Save & Sleep", (dialog, id) -> {
+                    String caffeine = getSelectedOption(caffeineGroup);
+                    String stress = getSelectedOption(stressGroup);
+                    String exercise = getSelectedOption(exerciseGroup);
+
+                    String todayDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+                    Map<String, Object> habits = new HashMap<>();
+                    habits.put("caffeine", caffeine);
+                    habits.put("stress", stress);
+                    habits.put("exercise", exercise);
+
+                    FirebaseFirestore.getInstance()
+                            .collection("Users")
+                            .document(userID)
+                            .collection("SleepRecords")
+                            .document(todayDate)
+                            .set(habits, SetOptions.merge())  // <-- ✅ FIXED
+                            .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Habits saved!", Toast.LENGTH_SHORT).show());
+
+                    onComplete.run(); // continue sleep logic
+                })
+                .setNegativeButton("Cancel", (dialog, id) -> dialog.dismiss());
+
+        builder.create().show();
+    }
+
+    private String getSelectedOption(RadioGroup group) {
+        int selectedId = group.getCheckedRadioButtonId();
+        RadioButton button = group.findViewById(selectedId);
+        return (button != null) ? button.getText().toString() : "Not answered";
+    }
+
 }
