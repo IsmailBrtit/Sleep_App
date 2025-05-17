@@ -8,12 +8,13 @@ import android.view.View;
 import android.widget.TimePicker;
 import android.widget.Toast;
 import android.widget.ToggleButton;
+import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.Calendar;
 
-import com.example.sleep_app.alarmBroadcastReceiver.AlarmReceiver;
+import com.example.sleep_app.receiver.AlarmReceiver;
 import com.example.sleep_app.databinding.ActivityAlarmBinding;
 
 public class Alarm extends AppCompatActivity {
@@ -41,16 +42,21 @@ public class Alarm extends AppCompatActivity {
             calendar.set(Calendar.HOUR_OF_DAY, binding.timePicker.getHour());
             calendar.set(Calendar.MINUTE, binding.timePicker.getMinute());
             calendar.set(Calendar.SECOND, 0);
-
-            Intent intent = new Intent(this, AlarmReceiver.class);
-            pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            calendar.set(Calendar.MILLISECOND, 0);
 
             time = calendar.getTimeInMillis();
             if (System.currentTimeMillis() > time) {
                 time += AlarmManager.INTERVAL_DAY;
             }
 
-            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, time, 10000, pendingIntent);
+            Intent intent = new Intent(this, AlarmReceiver.class);
+            pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Log.e("AlarmDebug", "Alarm scheduled for millis: " + calendar.getTimeInMillis() +
+                    ", which is in " + (calendar.getTimeInMillis() - System.currentTimeMillis()) / 1000 + " seconds");
+            // ✅ Set precise one-time alarm
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pendingIntent);
+
         } else {
             if (pendingIntent != null) {
                 alarmManager.cancel(pendingIntent);
@@ -58,4 +64,5 @@ public class Alarm extends AppCompatActivity {
             Toast.makeText(this, "ALARM OFF", Toast.LENGTH_SHORT).show();
         }
     }
+
 }

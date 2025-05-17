@@ -1,15 +1,20 @@
 package com.example.sleep_app.ui.fragments;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.AlarmClock;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,6 +25,14 @@ import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+
+
+import com.example.sleep_app.receiver.AlarmReceiver;
 import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.HashMap;
 import android.app.NotificationManager;
@@ -33,6 +46,7 @@ import com.google.firebase.firestore.SetOptions;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -66,7 +80,8 @@ public class HomeFragment extends Fragment {
     ProgressDialog progressDialog;
     volatile boolean countSec = true;
 
-    TimePicker sleepMilli,wakeMilli;
+    int sleepHour = -1, sleepMinute = -1;
+    int wakeHour = -1, wakeMinute = -1;
 
     public HomeFragment(){}
 
@@ -258,14 +273,62 @@ public class HomeFragment extends Fragment {
                 .setPositiveButton("SAVE", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        if(sleepMilli!=null && wakeMilli !=null){
+                        if (sleepHour != -1 && wakeHour != -1) {
+                            Log.d("AlarmDebug", "Set sleepHour=" + sleepHour + ", sleepMinute=" + sleepMinute +
+                                    ", wakeHour=" + wakeHour + ", wakeMinute=" + wakeMinute);
+
                             String today_datee = new SimpleDateFormat("dd-M-yyyy").format(new Date());
-                            long totalMillisec = (Math.abs(sleepMilli.getHour()-wakeMilli.getHour())*60
-                                    +Math.abs(sleepMilli.getMinute()-wakeMilli.getMinute()))*1000;
+                            long totalMillisec = (Math.abs(sleepHour - wakeHour) * 60
+                                    + Math.abs(sleepMinute - wakeMinute)) * 60 * 1000;
                             upDateWinNode(totalMillisec,today_datee);
-                            Toast.makeText(getContext(), "Done. ", Toast.LENGTH_SHORT).show();
-                        }
-                        else{
+
+                            // 🔔 Planifie l'alarme
+                            Calendar calendar = Calendar.getInstance();
+                            calendar.set(Calendar.HOUR_OF_DAY, wakeHour);
+                            calendar.set(Calendar.MINUTE, wakeMinute);
+                            calendar.set(Calendar.SECOND, 0);
+                            calendar.set(Calendar.MILLISECOND, 0);
+
+                            Toast.makeText(getContext(), "Done. Alarm scheduled.", Toast.LENGTH_SHORT).show();
+
+                            // Si l'heure est passée, programme pour demain
+                            if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
+                                calendar.add(Calendar.DAY_OF_MONTH, 1);
+                            }
+
+                            Intent intent = new Intent(getContext(), AlarmReceiver.class);
+
+                            // 🔊 Récupère la sonnerie personnalisée si elle existe
+                            SharedPreferences prefs = getContext().getSharedPreferences("SleepPrefs", Context.MODE_PRIVATE);
+                            String ringtoneUriStr = prefs.getString("ringtone_uri", null);
+                            if (ringtoneUriStr != null) {
+                                intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
+                            }
+                            int uniqueId = (int) System.currentTimeMillis();
+                            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                                    getContext(), uniqueId, intent, PendingIntent.FLAG_IMMUTABLE);
+
+
+                            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+                            alarmManager.setExactAndAllowWhileIdle(
+                                    AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+                            long millisUntilAlarm = calendar.getTimeInMillis() - System.currentTimeMillis();
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
+                                        != PackageManager.PERMISSION_GRANTED) {
+                                    ActivityCompat.requestPermissions(getActivity(),
+                                            new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
+                                    return; // stop if not granted
+                                }
+                            }
+
+                            Log.d("SleepApp", "Calling notification with " + millisUntilAlarm + " ms");
+                            Toast.makeText(getContext(), "Alarm in " + millisUntilAlarm / 60000 + " min", Toast.LENGTH_SHORT).show();
+
+                            Log.e("MissClick", "Going to show countdown notification");
+
+                            showAlarmCountdownNotification(millisUntilAlarm);
+                        } else {
                             Toast.makeText(getContext(), "Kindly set valid sleep and wake up time!", Toast.LENGTH_SHORT).show();
                         }
                     }
@@ -289,11 +352,12 @@ public class HomeFragment extends Fragment {
                         new TimePickerDialog.OnTimeSetListener() {
                             @Override
                             public void onTimeSet(TimePicker timePicker, int sleepHourT, int sleepMinuteT) {
-                                sleepMilli = timePicker;
+                                sleepHour = sleepHourT;
+                                sleepMinute = sleepMinuteT;
                                 String am_pm ;
                                 if(sleepHourT>=12) am_pm = "pm";
                                 else am_pm = "am";
-                                sleepHourT = sleepHourT%12;
+                                //sleepHourT = sleepHourT;
                                 formatTime(sleepHourT,sleepMinuteT,setSleepTimeTv,am_pm);
                             }
 
@@ -312,12 +376,13 @@ public class HomeFragment extends Fragment {
                         android.R.style.Theme_DeviceDefault_Dialog_MinWidth,
                         new TimePickerDialog.OnTimeSetListener() {
                             @Override
-                            public void onTimeSet(TimePicker timePicker, int wakeHour, int wakeMinute) {
-                                wakeMilli = timePicker;
+                            public void onTimeSet(TimePicker timePicker, int wakeHourT, int wakeMinuteT) {
+                                wakeHour = wakeHourT;
+                                wakeMinute = wakeMinuteT;
                                 String am_pm ;
                                 if(wakeHour>=12) am_pm = "pm";
                                 else am_pm = "am";
-                                wakeHour = wakeHour%12;
+                               // wakeHour = wakeHour;
 
                                 formatTime(wakeHour,wakeMinute,setWakeTimeTv,am_pm);
                             }
@@ -469,6 +534,37 @@ public class HomeFragment extends Fragment {
                 .show();
     }
 
+    private void showAlarmCountdownNotification(long millisUntilAlarm) {
+        long totalMinutes = millisUntilAlarm / (60 * 1000);
+        long hours = totalMinutes / 60;
+        long minutes = totalMinutes % 60;
+
+        String timeText = (hours > 0) ? (hours + "h " + minutes + "min") : (minutes + " min");
+        String content = "Your smart alarm is set in " + timeText;
+
+
+        NotificationManager notificationManager = (NotificationManager)
+                getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    "sleep_alarm_channel",
+                    "Sleep Alarm Channel",
+                    NotificationManager.IMPORTANCE_DEFAULT
+            );
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(getContext(), "sleep_alarm_channel")
+                .setSmallIcon(R.drawable.clock) // replace with your icon
+                .setContentTitle("⏰ Smart Alarm Scheduled")
+                .setContentText(content)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true);
+
+        notificationManager.notify(101, builder.build());
+    }
+
 
     //Avg Function
     private void avg_sleep() {
@@ -611,10 +707,55 @@ public class HomeFragment extends Fragment {
                             .document(userID)
                             .collection("SleepRecords")
                             .document(todayDate)
-                            .set(habits, SetOptions.merge())  // <-- ✅ FIXED
+                            .set(habits, SetOptions.merge())
                             .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Habits saved!", Toast.LENGTH_SHORT).show());
 
-                    onComplete.run(); // continue sleep logic
+                    //  REVEIL INTELLIGENT
+
+                    int baseCycles = 5;
+
+                    if (caffeine.equalsIgnoreCase("Yes")) baseCycles++;
+                    if (stress.equalsIgnoreCase("High")) baseCycles++;
+                    if (exercise.equalsIgnoreCase("Yes") && !caffeine.equalsIgnoreCase("Yes") && !stress.equalsIgnoreCase("High")) baseCycles--;
+
+                    if (baseCycles < 4) baseCycles = 4;
+                    if (baseCycles > 6) baseCycles = 6;
+
+                    SharedPreferences prefs = getContext().getSharedPreferences("SleepPrefs", Context.MODE_PRIVATE);
+                    boolean isSmartAlarmEnabled = prefs.getBoolean("smart_alarm_enabled", true);
+                    //  alarme apres N cycles
+                    if (isSmartAlarmEnabled) {
+                        // ⏰ 4. Programmer l’alarme après N * 90 minutes
+                        Calendar calendar = Calendar.getInstance();
+                        calendar.add(Calendar.MINUTE, baseCycles * 90);
+
+                        Intent intent = new Intent(getContext(), AlarmReceiver.class);
+                        String ringtoneUriStr = prefs.getString("ringtone_uri", null);
+                        if (ringtoneUriStr != null) {
+                            intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
+                        }
+
+                        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                                getContext(), 1, intent, PendingIntent.FLAG_IMMUTABLE);
+
+                        AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+                        alarmManager.setExactAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+                    }
+
+                    // 📊 5. Sauvegarder le nombre de cycles même si réveil désactivé
+                    Map<String, Object> cycleMap = new HashMap<>();
+                    cycleMap.put("cyclesUsed", baseCycles);
+
+                    FirebaseFirestore.getInstance()
+                            .collection("Users")
+                            .document(userID)
+                            .collection("SleepRecords")
+                            .document(todayDate)
+                            .set(cycleMap, SetOptions.merge());
+
+                    // 🚀 Continuer la logique du bouton "Start Sleep"
+                    onComplete.run();
                 })
                 .setNegativeButton("Cancel", (dialog, id) -> dialog.dismiss());
 
