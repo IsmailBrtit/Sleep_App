@@ -9,6 +9,8 @@ import android.widget.TimePicker;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 import android.util.Log;
+import android.os.Build;
+import android.provider.Settings;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -52,9 +54,17 @@ public class Alarm extends AppCompatActivity {
             Intent intent = new Intent(this, AlarmReceiver.class);
             pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    Toast.makeText(this, "Autorise les alarmes exactes dans les paramètres", Toast.LENGTH_LONG).show();
+                    Intent permissionIntent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                    startActivity(permissionIntent);
+                    return;
+                }
+            }
+
             Log.e("AlarmDebug", "Alarm scheduled for millis: " + calendar.getTimeInMillis() +
                     ", which is in " + (calendar.getTimeInMillis() - System.currentTimeMillis()) / 1000 + " seconds");
-            // ✅ Set precise one-time alarm
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pendingIntent);
 
         } else {

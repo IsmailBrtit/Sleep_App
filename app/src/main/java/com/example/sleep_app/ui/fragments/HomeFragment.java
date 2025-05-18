@@ -4,8 +4,10 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
+import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -32,6 +34,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
 
+import android.Manifest;
 import com.example.sleep_app.receiver.AlarmReceiver;
 import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.HashMap;
@@ -46,6 +49,7 @@ import com.google.firebase.firestore.SetOptions;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
@@ -79,17 +83,58 @@ public class HomeFragment extends Fragment {
     SharedPreferences sharedPreferences;
     ProgressDialog progressDialog;
     volatile boolean countSec = true;
+    private Handler countdownHandler = new Handler();
+    private Runnable countdownRunnable;
+    private static final int NOTIF_ID = 123;
+    private static final int ANDROID_13 = 33; // TIRAMISU
+    private boolean isAlarmReceiverRegistered = false;
+
+
+
 
     int sleepHour = -1, sleepMinute = -1;
     int wakeHour = -1, wakeMinute = -1;
 
     public HomeFragment(){}
 
+    private final BroadcastReceiver alarmTriggeredReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.d("SleepApp", "Received alarm broadcast. Stopping sleep...");
+
+            String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            SharedPreferences.Editor myEdit = sharedPreferences.edit();
+            myEdit.putString("name", "active");
+            myEdit.putString("age", timeStamp);
+            myEdit.putString("sleepAt", timeStamp);
+            myEdit.putString("wakeUp", timeStamp);
+            myEdit.commit();
+
+            countSec = false;
+            if (thread != null) thread.interrupt();
+            setWakeTime();
+            toggleDoNotDisturb(false);
+            cancelCountdownNotification();
+            getOperationLocally();
+        }
+    };
+
+
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_home,container,false);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    "alarm_channel", "Alarm Notifications", NotificationManager.IMPORTANCE_HIGH
+            );
+            NotificationManager manager = requireContext().getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+        }
+
+
         binding = FragmentHomeBinding.bind(view);
 
         FirebaseFirestore firestore = FirebaseFirestore.getInstance();
@@ -101,8 +146,6 @@ public class HomeFragment extends Fragment {
         setWakeTime();
         avg_sleep();
         updateRecommendation();
-
-
 
 
         binding.addSleepExtra.setOnClickListener(new View.OnClickListener() {
@@ -118,9 +161,7 @@ public class HomeFragment extends Fragment {
             }
         });
 
-
         dataRetriveFromFirebase();
-
 
         binding.userProfileImage.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -167,13 +208,25 @@ public class HomeFragment extends Fragment {
                     });
                 }
                 else {
+                    AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+                    Intent intent = new Intent(requireContext(), AlarmReceiver.class);
+                    PendingIntent pendingIntent = PendingIntent.getBroadcast(requireContext(), 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    alarmManager.cancel(pendingIntent);
 
+                    // Stop dynamic notification countdown
+                    cancelCountdownNotification();
 
                     String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
                     String sleepAt = sharedPreferences.getString("sleepAt", "");
 
                     Timestamp date_1 = stringToTimestamp(sharedPreferences.getString("age",""));
                     Timestamp date_2 = stringToTimestamp(timeStamp);
+
+                    if (date_1 == null || date_2 == null) {
+                        Toast.makeText(getContext(), "Données manquantes pour calculer la durée", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
                     long milliseconds = date_2.getTime() - date_1.getTime();
 
                     String today_date = new SimpleDateFormat("dd-M-yyyy").format(new Date());
@@ -196,15 +249,9 @@ public class HomeFragment extends Fragment {
                             .document(userID)
                             .collection("SleepRecords")
                             .document(todayDateFirestore)
-                            .set(recordMap, SetOptions.merge())
-                            .addOnSuccessListener(unused -> {
-                                // Optional: Toast success
-                            })
-                            .addOnFailureListener(e -> {
-                                // Optional: Toast error
-                            });
+                            .set(recordMap, SetOptions.merge());
 
-// ✅ Now clear shared prefs
+
                     SharedPreferences.Editor myEdit = sharedPreferences.edit();
                     myEdit.putString("name", null);
                     myEdit.putString("age", null);
@@ -213,12 +260,21 @@ public class HomeFragment extends Fragment {
 
                     setWakeTime();
                     countSec = false;
+                    if (thread != null) thread.interrupt();
                     toggleDoNotDisturb(false);// DISABLE DND when ending sleep
                     getOperationLocally();
                 }
             }
         });
 
+
+        IntentFilter filter = new IntentFilter("com.example.sleep_app.ALARM_TRIGGERED");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // API 26+
+            requireContext().registerReceiver(alarmTriggeredReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            ContextCompat.registerReceiver(requireContext(), alarmTriggeredReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        }
+        isAlarmReceiverRegistered = true;
 
         return view;
     }
@@ -282,7 +338,6 @@ public class HomeFragment extends Fragment {
                                     + Math.abs(sleepMinute - wakeMinute)) * 60 * 1000;
                             upDateWinNode(totalMillisec,today_datee);
 
-                            // 🔔 Planifie l'alarme
                             Calendar calendar = Calendar.getInstance();
                             calendar.set(Calendar.HOUR_OF_DAY, wakeHour);
                             calendar.set(Calendar.MINUTE, wakeMinute);
@@ -304,14 +359,32 @@ public class HomeFragment extends Fragment {
                             if (ringtoneUriStr != null) {
                                 intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
                             }
-                            int uniqueId = (int) System.currentTimeMillis();
                             PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                                    getContext(), uniqueId, intent, PendingIntent.FLAG_IMMUTABLE);
+                                    getContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
 
                             AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                if (!alarmManager.canScheduleExactAlarms()) {
+                                    Toast.makeText(getContext(), "Autorise les alarmes exactes dans les paramètres", Toast.LENGTH_LONG).show();
+                                    Intent settingsIntent  = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                                    startActivity(settingsIntent );
+                                    return;
+                                }
+                            }
                             alarmManager.setExactAndAllowWhileIdle(
                                     AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+                            startCountdownNotification(calendar.getTimeInMillis());
+
+                            String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+                            SharedPreferences.Editor myEdit = sharedPreferences.edit();
+
+                            myEdit.putString("name", "active");
+                            myEdit.putString("age", timeStamp);
+                            myEdit.putString("sleepAt", timeStamp);
+                            myEdit.putString("wakeUp", "");
+                            myEdit.apply();
+
                             long millisUntilAlarm = calendar.getTimeInMillis() - System.currentTimeMillis();
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
@@ -327,7 +400,6 @@ public class HomeFragment extends Fragment {
 
                             Log.e("MissClick", "Going to show countdown notification");
 
-                            showAlarmCountdownNotification(millisUntilAlarm);
                         } else {
                             Toast.makeText(getContext(), "Kindly set valid sleep and wake up time!", Toast.LENGTH_SHORT).show();
                         }
@@ -457,8 +529,14 @@ public class HomeFragment extends Fragment {
                             }
                             String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
 
+
                             Timestamp date_1 = stringToTimestamp(sharedPreferences.getString("age",""));
                             Timestamp date_2 = stringToTimestamp(timeStamp);
+                            if (date_1 == null || date_2 == null) {
+                                Log.e("SleepApp", "⛔ date_1 or date_2 is null, skipping countdown update");
+                                return;
+                            }
+
                             long milliseconds = date_2.getTime() - date_1.getTime();
                             long hour = (milliseconds/1000)/3600;
                             long min = ((milliseconds/1000)/60)%60;
@@ -485,13 +563,16 @@ public class HomeFragment extends Fragment {
 
     private Timestamp stringToTimestamp(String date) {
         try {
+            if (date == null || date.isEmpty()) return null;
             SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             Date parsedDate = dateFormat.parse(date);
             return new Timestamp(parsedDate.getTime());
         } catch (Exception e) {
+            Log.e("TimestampError", "Invalid date string: " + date);
             return null;
         }
     }
+
 
     private void dataRetriveFromFirebase() {
         FirebaseFirestore.getInstance()
@@ -534,7 +615,7 @@ public class HomeFragment extends Fragment {
                 .show();
     }
 
-    private void showAlarmCountdownNotification(long millisUntilAlarm) {
+   /*private void showAlarmCountdownNotification(long millisUntilAlarm) {
         long totalMinutes = millisUntilAlarm / (60 * 1000);
         long hours = totalMinutes / 60;
         long minutes = totalMinutes % 60;
@@ -563,7 +644,7 @@ public class HomeFragment extends Fragment {
                 .setAutoCancel(true);
 
         notificationManager.notify(101, builder.build());
-    }
+    }*/
 
 
     //Avg Function
@@ -655,11 +736,6 @@ public class HomeFragment extends Fragment {
 
     }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        countSec = false;
-    }
 
     private void toggleDoNotDisturb(boolean enable) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -710,43 +786,59 @@ public class HomeFragment extends Fragment {
                             .set(habits, SetOptions.merge())
                             .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Habits saved!", Toast.LENGTH_SHORT).show());
 
-                    //  REVEIL INTELLIGENT
 
                     int baseCycles = 5;
-
                     if (caffeine.equalsIgnoreCase("Yes")) baseCycles++;
                     if (stress.equalsIgnoreCase("High")) baseCycles++;
                     if (exercise.equalsIgnoreCase("Yes") && !caffeine.equalsIgnoreCase("Yes") && !stress.equalsIgnoreCase("High")) baseCycles--;
-
                     if (baseCycles < 4) baseCycles = 4;
                     if (baseCycles > 6) baseCycles = 6;
 
-                    SharedPreferences prefs = getContext().getSharedPreferences("SleepPrefs", Context.MODE_PRIVATE);
-                    boolean isSmartAlarmEnabled = prefs.getBoolean("smart_alarm_enabled", true);
-                    //  alarme apres N cycles
-                    if (isSmartAlarmEnabled) {
-                        // ⏰ 4. Programmer l’alarme après N * 90 minutes
-                        Calendar calendar = Calendar.getInstance();
-                        calendar.add(Calendar.MINUTE, baseCycles * 90);
 
-                        Intent intent = new Intent(getContext(), AlarmReceiver.class);
-                        String ringtoneUriStr = prefs.getString("ringtone_uri", null);
+                    Intent intent = new Intent(getContext(), AlarmReceiver.class);
+
+                    SharedPreferences prefs = getContext().getSharedPreferences("SleepPrefs", Context.MODE_PRIVATE);
+                    String ringtoneUriStr = prefs.getString("ringtone_uri", null);
+                    if (ringtoneUriStr != null) {
+                        intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
+                    }
+                    boolean isSmartAlarmEnabled = prefs.getBoolean("smart_alarm_enabled", true);
+
+                    if (isSmartAlarmEnabled) {
+                        AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            if (!alarmManager.canScheduleExactAlarms()) {
+                                Intent settingsIntent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                                startActivity(settingsIntent);
+                                Toast.makeText(getContext(), "Autorise l’alarme exacte pour qu’elle fonctionne", Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                        }
+
+                        Calendar calendar = Calendar.getInstance();
+
+                        //calendar.add(Calendar.MINUTE, baseCycles * 90);
+                        calendar.add(Calendar.MINUTE, 1);
+
+                        intent.setClass(getContext(), AlarmReceiver.class);
+                        String ringtoneUriStrSmart = prefs.getString("ringtone_uri", null);
                         if (ringtoneUriStr != null) {
                             intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
                         }
 
                         PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                                getContext(), 1, intent, PendingIntent.FLAG_IMMUTABLE);
+                                getContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
-                        AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
                         alarmManager.setExactAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+
+                        startCountdownNotification(calendar.getTimeInMillis());
                     }
 
-                    // 📊 5. Sauvegarder le nombre de cycles même si réveil désactivé
+
                     Map<String, Object> cycleMap = new HashMap<>();
                     cycleMap.put("cyclesUsed", baseCycles);
-
                     FirebaseFirestore.getInstance()
                             .collection("Users")
                             .document(userID)
@@ -754,7 +846,6 @@ public class HomeFragment extends Fragment {
                             .document(todayDate)
                             .set(cycleMap, SetOptions.merge());
 
-                    // 🚀 Continuer la logique du bouton "Start Sleep"
                     onComplete.run();
                 })
                 .setNegativeButton("Cancel", (dialog, id) -> dialog.dismiss());
@@ -767,5 +858,87 @@ public class HomeFragment extends Fragment {
         RadioButton button = group.findViewById(selectedId);
         return (button != null) ? button.getText().toString() : "Not answered";
     }
+
+    private void showAlarmCountdownNotification(long millisLeft) {
+        String message;
+
+        if (millisLeft >= 3600000) { // >= 1 hour
+            long hours = millisLeft / (1000 * 60 * 60);
+            long minutes = (millisLeft / (1000 * 60)) % 60;
+            message = hours + "h " + minutes + "min";
+        } else if (millisLeft >= 60000) { // >= 1 min
+            long minutes = millisLeft / (1000 * 60);
+            message = minutes + " min";
+        } else {
+            long seconds = millisLeft / 1000;
+            message = seconds + " sec";
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(requireContext(), "alarm_channel")
+                .setSmallIcon(R.drawable.clock)
+                .setContentTitle("Smart Alarm")
+                .setContentText("Réveil dans " + message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(false)
+                .setOngoing(true);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(requireActivity(),
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+                return;
+            }
+        }
+
+        NotificationManagerCompat manager = NotificationManagerCompat.from(requireContext());
+        manager.notify(NOTIF_ID, builder.build());
+    }
+
+
+    private void startCountdownNotification(long targetTimeMillis) {
+        countdownRunnable = new Runnable() {
+            @Override
+            public void run() {
+                long remainingMillis = targetTimeMillis - System.currentTimeMillis();
+                if (remainingMillis > 0) {
+                    showAlarmCountdownNotification(remainingMillis);
+
+                    // Mise à jour + rapide si < 1 minute
+                    long delay = remainingMillis < 60000 ? 1000 : 60000;
+                    countdownHandler.postDelayed(this, delay);
+                } else {
+                    cancelCountdownNotification();
+                }
+            }
+        };
+        countdownHandler.post(countdownRunnable);
+    }
+
+
+    private void cancelCountdownNotification() {
+        if (!isAdded()) return;
+        NotificationManagerCompat manager = NotificationManagerCompat.from(requireContext());
+        manager.cancel(NOTIF_ID);
+        if (countdownHandler != null && countdownRunnable != null) {
+            countdownHandler.removeCallbacks(countdownRunnable);
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (isAlarmReceiverRegistered) {
+            try {
+                requireContext().unregisterReceiver(alarmTriggeredReceiver);
+                isAlarmReceiverRegistered = false;
+            } catch (IllegalArgumentException e) {
+                Log.w("HomeFragment", "Receiver already unregistered");
+            }
+        }
+    }
+
+
+
 
 }
