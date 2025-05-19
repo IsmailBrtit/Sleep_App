@@ -818,8 +818,8 @@ public class HomeFragment extends Fragment {
 
                         Calendar calendar = Calendar.getInstance();
 
-                        //calendar.add(Calendar.MINUTE, baseCycles * 90);
-                        calendar.add(Calendar.MINUTE, 1);
+                        calendar.add(Calendar.MINUTE, baseCycles * 90);
+                        //calendar.add(Calendar.MINUTE, 1);
 
                         intent.setClass(getContext(), AlarmReceiver.class);
                         String ringtoneUriStrSmart = prefs.getString("ringtone_uri", null);

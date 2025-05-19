@@ -16,6 +16,7 @@ import com.example.sleep_app.databinding.ActivityMainBinding;
 import com.example.sleep_app.ui.fragments.HomeFragment;
 import com.example.sleep_app.ui.fragments.SettingsFragment;
 import com.example.sleep_app.ui.fragments.StatsFragment;
+import com.example.sleep_app.ui.fragments.RelaxFragment;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.ismaeldivita.chipnavigation.ChipNavigationBar;
 //import java.util.concurrent.Executor;
@@ -62,6 +63,8 @@ public class MainActivity extends AppCompatActivity {
                     fragment = new StatsFragment();
                 } else if (id == R.id.settings) {
                     fragment = new SettingsFragment();
+                } else if (id == R.id.relax) {
+                    fragment = new RelaxFragment();
                 }
 
                 if (fragment != null) {

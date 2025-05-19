@@ -11,7 +11,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Paramètres de l’application"
+        android:text="Application Settings"
         android:textSize="18sp"
         android:textStyle="bold"
         android:textColor="@android:color/black"
@@ -25,7 +25,7 @@
         android:layout_height="wrap_content"
         android:background="@drawable/rounded_gradient_button"
         android:textColor="@android:color/white"
-        android:text="Choisir une sonnerie de réveil"
+        android:text="Choose an alarm ringtone"
         android:layout_marginBottom="24dp" />
 
     <!-- 🔹 CardView contenant le switch -->
@@ -48,7 +48,7 @@
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Activer le réveil intelligent"
+                android:text="Enable smart wake-up"
                 android:textColor="@android:color/black"
                 android:textSize="16sp"
                 android:layout_weight="1" />
