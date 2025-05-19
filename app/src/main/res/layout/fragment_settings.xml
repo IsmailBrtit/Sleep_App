@@ -18,17 +18,30 @@
         android:gravity="center"
         android:layout_marginBottom="24dp" />
 
-    <!-- 🔹 Bouton stylisé -->
-    <Button
-        android:id="@+id/selectRingtoneButton"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_select_ringtone"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/rounded_gradient_button"
-        android:textColor="@android:color/white"
-        android:text="Choose an alarm ringtone"
-        android:layout_marginBottom="24dp" />
+        android:layout_marginBottom="24dp"
+        app:cardElevation="6dp"
+        app:cardCornerRadius="16dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        app:cardBackgroundColor="@android:color/white"
+        android:clickable="true"
+        android:foreground="?attr/selectableItemBackground">
 
-    <!-- 🔹 CardView contenant le switch -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:text="Choose an alarm ringtone"
+            android:textColor="@android:color/black"
+            android:textSize="16sp"
+            android:gravity="center" />
+    </androidx.cardview.widget.CardView>
+
+
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

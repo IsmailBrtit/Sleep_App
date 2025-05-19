@@ -35,15 +35,16 @@ public class SettingsFragment extends Fragment {
                              @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_settings, container, false);
 
-        Button selectRingtoneButton = view.findViewById(R.id.selectRingtoneButton);
-        selectRingtoneButton.setOnClickListener(v -> {
+        androidx.cardview.widget.CardView cardSelectRingtone = view.findViewById(R.id.card_select_ringtone);
+        cardSelectRingtone.setOnClickListener(v -> {
             Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM);
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Sélectionnez votre sonnerie de réveil");
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select your alarm ringtone");
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Settings.System.DEFAULT_ALARM_ALERT_URI);
             startActivityForResult(intent, 999);
         });
+
 
         Switch switchSmartAlarm = view.findViewById(R.id.switchSmartAlarm);
 

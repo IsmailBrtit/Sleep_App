@@ -21,7 +21,6 @@
             android:textColor="@android:color/black"
             android:layout_gravity="center_horizontal" />
 
-        <!-- CARD 1 -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_meditation"
             android:layout_width="match_parent"
@@ -33,7 +32,7 @@
             android:layout_marginEnd="8dp"
             app:cardBackgroundColor="@android:color/white"
             android:clickable="true"
-            android:foreground="?attr/selectableItemBackground">
+            >
 
             <TextView
                 android:layout_width="match_parent"
@@ -45,7 +44,6 @@
                 android:gravity="center" />
         </androidx.cardview.widget.CardView>
 
-        <!-- CARD 2 -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_breathing"
             android:layout_width="match_parent"
@@ -69,7 +67,6 @@
                 android:gravity="center" />
         </androidx.cardview.widget.CardView>
 
-        <!-- CARD 3 -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_nature_sounds"
             android:layout_width="match_parent"
