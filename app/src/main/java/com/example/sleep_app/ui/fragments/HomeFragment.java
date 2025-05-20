@@ -36,6 +36,7 @@ import androidx.core.app.NotificationCompat;
 
 import android.Manifest;
 import com.example.sleep_app.receiver.AlarmReceiver;
+import com.example.sleep_app.receiver.DisableDndReceiver;
 import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.HashMap;
 import android.app.NotificationManager;
@@ -185,7 +186,8 @@ public class HomeFragment extends Fragment {
 
 
 
-        binding.startButton.setOnClickListener(new View.OnClickListener() {
+        //start sleep
+            binding.startButton.setOnClickListener(new View.OnClickListener() {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
@@ -204,6 +206,27 @@ public class HomeFragment extends Fragment {
                         setSleepTime();
                         countSec = true;
                         toggleDoNotDisturb(true);// ENABLE DND when starting sleep
+
+                        // Schedule DND disable 5 minutes before wake-up
+                        Calendar wakeCal = Calendar.getInstance();
+                        wakeCal.set(Calendar.HOUR_OF_DAY, wakeHour);
+                        wakeCal.set(Calendar.MINUTE, wakeMinute);
+                        wakeCal.set(Calendar.SECOND, 0);
+                        // Subtract 5 minutes
+                        wakeCal.add(Calendar.MINUTE, -5);
+
+                        Intent disableDndIntent = new Intent(requireContext(), DisableDndReceiver.class);
+                        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                                requireContext(),
+                                111,
+                                disableDndIntent,
+                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                        );
+
+                        AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, wakeCal.getTimeInMillis(), pendingIntent);
+
+
                         getOperationLocally();
                     });
                 }
@@ -818,8 +841,8 @@ public class HomeFragment extends Fragment {
 
                         Calendar calendar = Calendar.getInstance();
 
-                        calendar.add(Calendar.MINUTE, baseCycles * 90);
-                        //calendar.add(Calendar.MINUTE, 1);
+                        //calendar.add(Calendar.MINUTE, baseCycles * 90);
+                        calendar.add(Calendar.MINUTE, 1);
 
                         intent.setClass(getContext(), AlarmReceiver.class);
                         String ringtoneUriStrSmart = prefs.getString("ringtone_uri", null);
