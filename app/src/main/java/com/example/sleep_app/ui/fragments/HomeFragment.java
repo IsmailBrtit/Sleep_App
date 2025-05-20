@@ -101,24 +101,56 @@ public class HomeFragment extends Fragment {
     private final BroadcastReceiver alarmTriggeredReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.d("SleepApp", "Received alarm broadcast. Stopping sleep...");
+            Log.d("SleepApp", "Received alarm broadcast. Checking if sleep duration was short...");
 
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            String sleepAt = sharedPreferences.getString("sleepAt", "");
+
+            Timestamp start = stringToTimestamp(sharedPreferences.getString("age", ""));
+            Timestamp end = stringToTimestamp(timeStamp);
+
+            if (start == null || end == null) return;
+
+            long durationMillis = end.getTime() - start.getTime();
+            long durationMinutes = durationMillis / 1000 / 60;
+
+            Log.d("SleepApp", "Sleep duration: " + durationMinutes + " min");
+
+            //If total sleep was less than 5 minutes, disable DND to hear alarm clearly
+            if (durationMinutes < 5) {
+                Log.d("SleepApp", "Sleep was too short. Disabling DND early so alarm is audible.");
+                toggleDoNotDisturb(false);
+            }
+
+            // 🟡 Continue normal end-of-sleep logic
+            Map<String, Object> recordMap = new HashMap<>();
+            recordMap.put("sleepAt", sleepAt);
+            recordMap.put("wakeUp", timeStamp);
+            recordMap.put("duration", (durationMinutes / 60) + "h " + (durationMinutes % 60) + "min");
+
+            String todayDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+
+            FirebaseFirestore.getInstance()
+                    .collection("Users")
+                    .document(userID)
+                    .collection("SleepRecords")
+                    .document(todayDate)
+                    .set(recordMap, SetOptions.merge());
+
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
-            myEdit.putString("name", "active");
-            myEdit.putString("age", timeStamp);
-            myEdit.putString("sleepAt", timeStamp);
+            myEdit.putString("name", null);
+            myEdit.putString("age", null);
             myEdit.putString("wakeUp", timeStamp);
-            myEdit.commit();
+            myEdit.apply();
 
             countSec = false;
             if (thread != null) thread.interrupt();
             setWakeTime();
-            toggleDoNotDisturb(false);
             cancelCountdownNotification();
             getOperationLocally();
         }
     };
+
 
 
     @Override
@@ -191,7 +223,18 @@ public class HomeFragment extends Fragment {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
-                if (sharedPreferences.getString("name","").equals("")) {
+                String currentState = sharedPreferences.getString("name", "");
+
+                if (currentState == null || currentState.isEmpty()) {
+                    Calendar now = Calendar.getInstance();
+                    Calendar wakeCal = Calendar.getInstance();
+                    wakeCal.set(Calendar.HOUR_OF_DAY, wakeHour);
+                    wakeCal.set(Calendar.MINUTE, wakeMinute);
+                    wakeCal.set(Calendar.SECOND, 0);
+                    if (wakeCal.before(now)) {
+                        Toast.makeText(getContext(), "Wake-up time is already passed. Please set a valid time.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     showPreSleepHabitDialog(() -> {
                         SharedPreferences.Editor myEdit = sharedPreferences.edit();
                         String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -205,27 +248,34 @@ public class HomeFragment extends Fragment {
 
                         setSleepTime();
                         countSec = true;
+                        Log.d("SleepApp", "Attempting to enable DND...");
                         toggleDoNotDisturb(true);// ENABLE DND when starting sleep
 
-                        // Schedule DND disable 5 minutes before wake-up
-                        Calendar wakeCal = Calendar.getInstance();
-                        wakeCal.set(Calendar.HOUR_OF_DAY, wakeHour);
-                        wakeCal.set(Calendar.MINUTE, wakeMinute);
-                        wakeCal.set(Calendar.SECOND, 0);
+
+                        Log.d("SleepApp", "wakeHour = " + wakeHour + ", wakeMinute = " + wakeMinute);
+                        Log.d("SleepApp", "Now: " + now.getTime());
+                        Log.d("SleepApp", "Wake: " + wakeCal.getTime());
+
                         // Subtract 5 minutes
-                        wakeCal.add(Calendar.MINUTE, -5);
+                        long diffMillis = wakeCal.getTimeInMillis() - now.getTimeInMillis();
 
-                        Intent disableDndIntent = new Intent(requireContext(), DisableDndReceiver.class);
-                        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                                requireContext(),
-                                111,
-                                disableDndIntent,
-                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                        );
+                        if (diffMillis < 5 * 60 * 1000) {
+                            // If sleep duration is too short (< 5 min), disable DND after 2 sec
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                toggleDoNotDisturb(false);
+                            }, 2000);
+                        } else {
+                            // Otherwise, schedule to disable DND 5 minutes before wake-up
+                            wakeCal.add(Calendar.MINUTE, -5);
+                            Intent disableDndIntent = new Intent(requireContext(), DisableDndReceiver.class);
+                            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                                    requireContext(), 111, disableDndIntent,
+                                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                            );
 
-                        AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
-                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, wakeCal.getTimeInMillis(), pendingIntent);
-
+                            AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+                            alarmManager.setExact(AlarmManager.RTC_WAKEUP, wakeCal.getTimeInMillis(), pendingIntent);
+                        }
 
                         getOperationLocally();
                     });
@@ -309,6 +359,12 @@ public class HomeFragment extends Fragment {
 
             long hour = Objects.requireNonNull(timecurr).getHours();
             long min = timecurr.getMinutes();
+            wakeHour = (int) hour;
+            wakeMinute = (int) min;
+            sharedPreferences.edit()
+                    .putInt("wakeHour", wakeHour)
+                    .putInt("wakeMinute", wakeMinute)
+                    .apply();
             String am_pm ;
             if(hour>=12) am_pm = "pm";
             else am_pm = "am";
@@ -766,16 +822,26 @@ public class HomeFragment extends Fragment {
 
             if (!notificationManager.isNotificationPolicyAccessGranted()) {
                 // Ask user for permission
+                Toast.makeText(getContext(), "Please enable DND permission", Toast.LENGTH_LONG).show();
                 Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
                 startActivity(intent);
                 return;
             }
+
 
             if (enable) {
                 notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
             } else {
                 notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
             }
+
+            notificationManager.setInterruptionFilter(
+                    enable ? NotificationManager.INTERRUPTION_FILTER_NONE : NotificationManager.INTERRUPTION_FILTER_ALL
+            );
+
+            Log.d("SleepApp", "DND set to " + (enable ? "ON" : "OFF"));
+            Toast.makeText(getContext(), "DND " + (enable ? "enabled" : "disabled"), Toast.LENGTH_SHORT).show();
+
         }
     }
 
@@ -811,9 +877,9 @@ public class HomeFragment extends Fragment {
 
 
                     int baseCycles = 5;
-                    if (caffeine.equalsIgnoreCase("Yes")) baseCycles++;
+                    if (!caffeine.equalsIgnoreCase("None")) baseCycles++;
                     if (stress.equalsIgnoreCase("High")) baseCycles++;
-                    if (exercise.equalsIgnoreCase("Yes") && !caffeine.equalsIgnoreCase("Yes") && !stress.equalsIgnoreCase("High")) baseCycles--;
+                    if (exercise.equalsIgnoreCase("Yes") && caffeine.equalsIgnoreCase("None") && !stress.equalsIgnoreCase("High")) baseCycles--;
                     if (baseCycles < 4) baseCycles = 4;
                     if (baseCycles > 6) baseCycles = 6;
 
