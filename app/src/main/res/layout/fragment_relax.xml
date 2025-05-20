@@ -21,28 +21,6 @@
             android:textColor="@android:color/black"
             android:layout_gravity="center_horizontal" />
 
-        <androidx.cardview.widget.CardView
-            android:id="@+id/card_meditation"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardElevation="6dp"
-            app:cardCornerRadius="16dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            app:cardBackgroundColor="@android:color/white"
-            android:clickable="true"
-            >
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="16dp"
-                android:text="Guided Meditation"
-                android:textColor="@android:color/black"
-                android:textSize="16sp"
-                android:gravity="center" />
-        </androidx.cardview.widget.CardView>
 
         <androidx.cardview.widget.CardView
             android:id="@+id/card_breathing"

@@ -74,7 +74,7 @@
                 android:text="Set Sleep Time"
                 android:textColor="@color/white"
                 android:layout_margin="10dp"
-                android:background="@drawable/button_colour" />
+                android:background="@drawable/button_colour"  />
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/setWakeTimeBtn"
