@@ -101,8 +101,8 @@ public class LoginActivity extends AppCompatActivity {
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("name", userName);
         userMap.put("email", email);
-        userMap.put("7days", "33;33;33;33;33;33;33");
-        userMap.put("Win", "");
+        userMap.put("7days", "0;0;0;0;0;0;0");
+       // userMap.put("Win", "");
         userMap.put("user_image", st);
 
         db.collection("Users").document(UID)
