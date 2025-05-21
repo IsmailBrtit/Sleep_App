@@ -52,11 +52,14 @@ public class ProfileActivity extends AppCompatActivity {
         binding.logout.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(ProfileActivity.this);
+                MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(
+                        ProfileActivity.this,
+                        com.google.android.material.R.style.Theme_Material3_Light_Dialog
+                );
                 builder.setTitle("Logout");
                 builder.setIcon(android.R.drawable.ic_dialog_alert);
                 builder.setMessage("Are you sure you want to logout?");
-                builder.setBackground(getResources().getDrawable(R.drawable.input_background, null));
+               // builder.setBackground(getResources().getDrawable(R.drawable.input_background, null));
                 builder.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {

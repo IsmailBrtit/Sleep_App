@@ -55,7 +55,7 @@ public class StatsFragment extends Fragment {
                     ArrayList<BarEntry> entries = new ArrayList<>();
                     for (int i = 0; i < parts.length; i++) {
                         float percent = Float.parseFloat(parts[i]);
-                        float hours = (percent * 24f) / 100f;
+                        float hours = (percent * 8f) / 100f;
                         entries.add(new BarEntry(i, hours));
                     }
 
@@ -98,31 +98,47 @@ public class StatsFragment extends Fragment {
 
     private void loadHabitsChart() {
         String uid = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
-        List<String> habits = Arrays.asList("caffeine", "stress", "exercise");
+        List<String> habits = Arrays.asList("Caffeine", "Stress", "Exercise");
         int[] values = new int[habits.size()];
+        final int[] validCount = {0};
 
         FirebaseFirestore.getInstance().collection("Users")
                 .document(uid)
                 .collection("SleepRecords")
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    int count = 0;
                     for (DocumentSnapshot doc : querySnapshot) {
-                        for (int i = 0; i < habits.size(); i++) {
-                            String val = doc.getString(habits.get(i));
-                            if (val != null && val.equalsIgnoreCase("Yes")) values[i]++;
+                        boolean counted = false;
+
+                        String caffeine = doc.getString("caffeine");
+                        if (caffeine != null && (caffeine.equalsIgnoreCase("A little") || caffeine.equalsIgnoreCase("A lot"))) {
+                            values[0]++;
+                            counted = true;
                         }
-                        count++;
+
+                        String stress = doc.getString("stress");
+                        if (stress != null && stress.equalsIgnoreCase("High")) {
+                            values[1]++;
+                            counted = true;
+                        }
+
+                        String exercise = doc.getString("exercise");
+                        if (exercise != null && exercise.equalsIgnoreCase("Yes")) {
+                            values[2]++;
+                            counted = true;
+                        }
+
+                        if (counted) validCount[0]++;
                     }
 
                     ArrayList<BarEntry> entries = new ArrayList<>();
-                    for (int i = 0; i < habits.size(); i++) {
-                        float percent = (count == 0) ? 0 : (values[i] * 100f) / count;
+                    for (int i = 0; i < values.length; i++) {
+                        float percent = (validCount[0] == 0) ? 0 : (values[i] * 100f) / validCount[0];
                         entries.add(new BarEntry(i, percent));
                     }
 
                     BarDataSet dataSet = new BarDataSet(entries, "Habit Frequencies (%)");
-                    dataSet.setColors(ColorTemplate.COLORFUL_COLORS);
+                    dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
                     dataSet.setValueTextColor(Color.BLACK);
                     dataSet.setValueTextSize(12f);
 
@@ -135,12 +151,13 @@ public class StatsFragment extends Fragment {
                     desc.setTextSize(16f);
                     chart.setDescription(desc);
 
+                    chart.getXAxis().setGranularity(1f);
                     chart.getXAxis().setValueFormatter(new ValueFormatter() {
                         @Override
                         public String getFormattedValue(float value) {
-                            if ((int) value >= 0 && (int) value < habits.size()) {
-                                return habits.get((int) value);
-                            } else return "";
+                            int index = (int) value;
+                            if (index >= 0 && index < habits.size()) return habits.get(index);
+                            else return "";
                         }
                     });
 

@@ -50,14 +50,6 @@
             android:layout_height="300dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- Optional Footer Text -->
-        <TextView
-            android:id="@+id/tvExtraStats"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="(Coming soon) Trends: Stress, Caffeine, Activity"
-            android:textSize="14sp"
-            android:textColor="@color/darker_gray" />
 
     </LinearLayout>
 </ScrollView>

@@ -47,7 +47,6 @@
 
         <receiver android:name="com.example.sleep_app.receiver.AlarmReceiver"
             android:exported="true" />
-        <receiver android:name="com.example.sleep_app.receiver.DisableDndReceiver" />
     </application>
 
 </manifest>

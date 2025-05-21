@@ -28,7 +28,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="15dp"
             android:fontFamily="@font/amaranth"
-            android:text="Sleepometer"
+            android:text="SleepMind"
             android:textColor="@android:color/white"
             android:textSize="35sp"
             android:textStyle="bold" />

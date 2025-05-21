@@ -219,22 +219,11 @@ public class HomeFragment extends Fragment {
 
 
         //start sleep
-            binding.startButton.setOnClickListener(new View.OnClickListener() {
+        binding.startButton.setOnClickListener(new View.OnClickListener() {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
-                String currentState = sharedPreferences.getString("name", "");
-
-                if (currentState == null || currentState.isEmpty()) {
-                    Calendar now = Calendar.getInstance();
-                    Calendar wakeCal = Calendar.getInstance();
-                    wakeCal.set(Calendar.HOUR_OF_DAY, wakeHour);
-                    wakeCal.set(Calendar.MINUTE, wakeMinute);
-                    wakeCal.set(Calendar.SECOND, 0);
-                    if (wakeCal.before(now)) {
-                        Toast.makeText(getContext(), "Wake-up time is already passed. Please set a valid time.", Toast.LENGTH_LONG).show();
-                        return;
-                    }
+                if (sharedPreferences.getString("name","").equals("")) {
                     showPreSleepHabitDialog(() -> {
                         SharedPreferences.Editor myEdit = sharedPreferences.edit();
                         String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -243,40 +232,11 @@ public class HomeFragment extends Fragment {
                         myEdit.putString("age", timeStamp);
                         myEdit.putString("sleepAt", timeStamp);
                         myEdit.putString("wakeUp", "");
-
                         myEdit.commit();
 
                         setSleepTime();
                         countSec = true;
-                        Log.d("SleepApp", "Attempting to enable DND...");
                         toggleDoNotDisturb(true);// ENABLE DND when starting sleep
-
-
-                        Log.d("SleepApp", "wakeHour = " + wakeHour + ", wakeMinute = " + wakeMinute);
-                        Log.d("SleepApp", "Now: " + now.getTime());
-                        Log.d("SleepApp", "Wake: " + wakeCal.getTime());
-
-                        // Subtract 5 minutes
-                        long diffMillis = wakeCal.getTimeInMillis() - now.getTimeInMillis();
-
-                        if (diffMillis < 5 * 60 * 1000) {
-                            // If sleep duration is too short (< 5 min), disable DND after 2 sec
-                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                                toggleDoNotDisturb(false);
-                            }, 2000);
-                        } else {
-                            // Otherwise, schedule to disable DND 5 minutes before wake-up
-                            wakeCal.add(Calendar.MINUTE, -5);
-                            Intent disableDndIntent = new Intent(requireContext(), DisableDndReceiver.class);
-                            PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                                    requireContext(), 111, disableDndIntent,
-                                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                            );
-
-                            AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
-                            alarmManager.setExact(AlarmManager.RTC_WAKEUP, wakeCal.getTimeInMillis(), pendingIntent);
-                        }
-
                         getOperationLocally();
                     });
                 }
@@ -301,28 +261,55 @@ public class HomeFragment extends Fragment {
                     }
 
                     long milliseconds = date_2.getTime() - date_1.getTime();
-
-                    String today_date = new SimpleDateFormat("dd-M-yyyy").format(new Date());
                     String todayDateFirestore = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+                    String todayDateForWin = new SimpleDateFormat("dd-M-yyyy").format(new Date());
 
-                    upDateWinNode(milliseconds,today_date);
+                    upDateWinNode(milliseconds, todayDateForWin);
 
                     long hours = (milliseconds / 1000) / 3600;
                     long minutes = ((milliseconds / 1000) / 60) % 60;
                     String duration = hours + "h " + minutes + "min";
-
-                    Map<String, Object> recordMap = new HashMap<>();
-                    recordMap.put("sleepAt", sleepAt);
-                    recordMap.put("wakeUp", timeStamp);
-                    recordMap.put("duration", duration);
-
 
                     FirebaseFirestore.getInstance()
                             .collection("Users")
                             .document(userID)
                             .collection("SleepRecords")
                             .document(todayDateFirestore)
-                            .set(recordMap, SetOptions.merge());
+                            .get()
+                            .addOnSuccessListener(documentSnapshot -> {
+                                long totalMillis = milliseconds;
+
+                                if (documentSnapshot.exists()) {
+                                    String prevDuration = documentSnapshot.getString("duration");
+                                    if (prevDuration != null && prevDuration.contains("h")) {
+                                        String[] parts = prevDuration.split("h|min");
+                                        try {
+                                            int prevH = Integer.parseInt(parts[0].trim());
+                                            int prevM = Integer.parseInt(parts[1].trim());
+                                            totalMillis += (prevH * 3600L + prevM * 60L) * 1000;
+                                        } catch (Exception e) {
+                                            Log.e("SleepApp", "Parsing error in previous duration", e);
+                                        }
+                                    }
+                                }
+
+                                long finalH = (totalMillis / 1000) / 3600;
+                                long finalM = ((totalMillis / 1000) / 60) % 60;
+                                String finalDuration = finalH + "h " + finalM + "min";
+
+                                Map<String, Object> recordMap = new HashMap<>();
+                                recordMap.put("sleepAt", sleepAt);
+                                recordMap.put("wakeUp", timeStamp);
+                                recordMap.put("duration", finalDuration);
+
+                                FirebaseFirestore.getInstance()
+                                        .collection("Users")
+                                        .document(userID)
+                                        .collection("SleepRecords")
+                                        .document(todayDateFirestore)
+                                        .set(recordMap, SetOptions.merge());
+                            });
+
 
 
                     SharedPreferences.Editor myEdit = sharedPreferences.edit();
@@ -339,6 +326,7 @@ public class HomeFragment extends Fragment {
                 }
             }
         });
+
 
 
         IntentFilter filter = new IntentFilter("com.example.sleep_app.ALARM_TRIGGERED");
@@ -400,7 +388,6 @@ public class HomeFragment extends Fragment {
     }
 
     private void ExtraSleepAddFunction() {
-
         View v = LayoutInflater.from(getContext()).inflate(R.layout.time_pick_dialog,null);
         AlertDialog timePickerDialog = new AlertDialog.Builder(getContext())
                 .setTitle("Set Time")
@@ -412,72 +399,49 @@ public class HomeFragment extends Fragment {
                             Log.d("AlarmDebug", "Set sleepHour=" + sleepHour + ", sleepMinute=" + sleepMinute +
                                     ", wakeHour=" + wakeHour + ", wakeMinute=" + wakeMinute);
 
-                            String today_datee = new SimpleDateFormat("dd-M-yyyy").format(new Date());
-                            long totalMillisec = (Math.abs(sleepHour - wakeHour) * 60
-                                    + Math.abs(sleepMinute - wakeMinute)) * 60 * 1000;
-                            upDateWinNode(totalMillisec,today_datee);
+                            long extraMillis = (Math.abs(sleepHour - wakeHour) * 60L + Math.abs(sleepMinute - wakeMinute)) * 60 * 1000;
+                            String todayDateFirestore = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
 
-                            Calendar calendar = Calendar.getInstance();
-                            calendar.set(Calendar.HOUR_OF_DAY, wakeHour);
-                            calendar.set(Calendar.MINUTE, wakeMinute);
-                            calendar.set(Calendar.SECOND, 0);
-                            calendar.set(Calendar.MILLISECOND, 0);
+                            FirebaseFirestore.getInstance()
+                                    .collection("Users")
+                                    .document(userID)
+                                    .collection("SleepRecords")
+                                    .document(todayDateFirestore)
+                                    .get()
+                                    .addOnSuccessListener(documentSnapshot -> {
+                                        if (documentSnapshot.exists()) {
+                                            String existingDuration = documentSnapshot.getString("duration");
+                                            long totalMillis = extraMillis;
 
-                            Toast.makeText(getContext(), "Done. Alarm scheduled.", Toast.LENGTH_SHORT).show();
+                                            if (existingDuration != null && existingDuration.contains("h")) {
+                                                String[] parts = existingDuration.split("h|min");
+                                                int hrs = Integer.parseInt(parts[0].trim());
+                                                int mins = Integer.parseInt(parts[1].trim());
+                                                totalMillis += (hrs * 3600L + mins * 60L) * 1000;
+                                            }
 
-                            // Si l'heure est passée, programme pour demain
-                            if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
-                                calendar.add(Calendar.DAY_OF_MONTH, 1);
-                            }
+                                            long hours = (totalMillis / 1000) / 3600;
+                                            long minutes = ((totalMillis / 1000) / 60) % 60;
 
-                            Intent intent = new Intent(getContext(), AlarmReceiver.class);
+                                            String newDuration = hours + "h " + minutes + "min";
 
-                            // 🔊 Récupère la sonnerie personnalisée si elle existe
-                            SharedPreferences prefs = getContext().getSharedPreferences("SleepPrefs", Context.MODE_PRIVATE);
-                            String ringtoneUriStr = prefs.getString("ringtone_uri", null);
-                            if (ringtoneUriStr != null) {
-                                intent.putExtra("ringtoneUri", Uri.parse(ringtoneUriStr));
-                            }
-                            PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                                    getContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE);
+                                            Map<String, Object> updateMap = new HashMap<>();
+                                            updateMap.put("duration", newDuration);
 
-
-                            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                if (!alarmManager.canScheduleExactAlarms()) {
-                                    Toast.makeText(getContext(), "Autorise les alarmes exactes dans les paramètres", Toast.LENGTH_LONG).show();
-                                    Intent settingsIntent  = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-                                    startActivity(settingsIntent );
-                                    return;
-                                }
-                            }
-                            alarmManager.setExactAndAllowWhileIdle(
-                                    AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
-                            startCountdownNotification(calendar.getTimeInMillis());
-
-                            String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-                            SharedPreferences.Editor myEdit = sharedPreferences.edit();
-
-                            myEdit.putString("name", "active");
-                            myEdit.putString("age", timeStamp);
-                            myEdit.putString("sleepAt", timeStamp);
-                            myEdit.putString("wakeUp", "");
-                            myEdit.apply();
-
-                            long millisUntilAlarm = calendar.getTimeInMillis() - System.currentTimeMillis();
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
-                                        != PackageManager.PERMISSION_GRANTED) {
-                                    ActivityCompat.requestPermissions(getActivity(),
-                                            new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
-                                    return; // stop if not granted
-                                }
-                            }
-
-                            Log.d("SleepApp", "Calling notification with " + millisUntilAlarm + " ms");
-                            Toast.makeText(getContext(), "Alarm in " + millisUntilAlarm / 60000 + " min", Toast.LENGTH_SHORT).show();
-
-                            Log.e("MissClick", "Going to show countdown notification");
+                                            FirebaseFirestore.getInstance()
+                                                    .collection("Users")
+                                                    .document(userID)
+                                                    .collection("SleepRecords")
+                                                    .document(todayDateFirestore)
+                                                    .update(updateMap)
+                                                    .addOnSuccessListener(aVoid -> {
+                                                        Toast.makeText(getContext(), "Extra nap added!", Toast.LENGTH_SHORT).show();
+                                                        Log.d("SleepApp", "Updated duration to: " + newDuration);
+                                                    });
+                                        } else {
+                                            Toast.makeText(getContext(), "No sleep data for today found.", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
 
                         } else {
                             Toast.makeText(getContext(), "Kindly set valid sleep and wake up time!", Toast.LENGTH_SHORT).show();
@@ -494,7 +458,6 @@ public class HomeFragment extends Fragment {
         TextView setSleepTimeTv = (TextView) v.findViewById(R.id.setSleepTimeTv);
         TextView setWakeTimeTv = (TextView) v.findViewById(R.id.setWakeTimeTv);
 
-
         v.findViewById(R.id.setSleepTimeBtn).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -508,15 +471,11 @@ public class HomeFragment extends Fragment {
                                 String am_pm ;
                                 if(sleepHourT>=12) am_pm = "pm";
                                 else am_pm = "am";
-                                //sleepHourT = sleepHourT;
                                 formatTime(sleepHourT,sleepMinuteT,setSleepTimeTv,am_pm);
                             }
-
-
                         }, Calendar.getInstance().get(Calendar.HOUR_OF_DAY),Calendar.getInstance().get(Calendar.MINUTE),false);
 
                 timePickerDialog.show();
-
             }
         });
 
@@ -533,13 +492,10 @@ public class HomeFragment extends Fragment {
                                 String am_pm ;
                                 if(wakeHour>=12) am_pm = "pm";
                                 else am_pm = "am";
-                               // wakeHour = wakeHour;
-
                                 formatTime(wakeHour,wakeMinute,setWakeTimeTv,am_pm);
                             }
                         }, Calendar.getInstance().get(Calendar.HOUR_OF_DAY),Calendar.getInstance().get(Calendar.MINUTE),false);
                 timePickerDialog1.show();
-
             }
         });
     }
@@ -736,16 +692,30 @@ public class HomeFragment extends Fragment {
                     if (fetch == null) return;
 
                     String[] sp = fetch.split(";");
-                    float sumPercentage = 0;
+                    float totalScore = 0f;
+
                     for (int i = 0; i < 7; i++) {
-                        sumPercentage += Float.parseFloat(sp[i]);
+                        float percent = Float.parseFloat(sp[i]);
+                        float hours = (percent * 24f) / 100f;
+
+                        float dayScore;
+                        if (hours >= 7.5f && hours <= 9f) {
+                            dayScore = 100f; // ideal sleep
+                        } else if (hours < 7.5f) {
+                            dayScore = (hours / 7.5f) * 100f;
+                        } else { // >9h, penalize oversleeping
+                            dayScore = (9f / hours) * 100f;
+                        }
+
+                        totalScore += dayScore;
                     }
 
-                    float sleepScore = sumPercentage / 7f;
+                    float sleepScore = totalScore / 7f;
                     if (sleepScore > 100f) sleepScore = 100f;
 
-                    // Convert back to hours just for display
-                    float avgHours = (sleepScore * 24f) / 100f;
+                    float avgHours = (sleepScore * 8f) / 100f; // 8h as base for visual
+                    int H = (int) avgHours;
+                    int M = Math.round((avgHours - H) * 60);
 
                     String reaction;
                     if (sleepScore < 50) {
@@ -758,12 +728,8 @@ public class HomeFragment extends Fragment {
                         reaction = "😁";
                     }
 
-                    int H = (int) avgHours;
-                    int M = Math.round((avgHours - H) * 60);
-                    String avgSleep = H + "hr " + M + "min";
-
                     binding.sleepScoreDataEmoji.setText(reaction);
-                    binding.avgSleepDurationHrs.setText(avgSleep);
+                    binding.avgSleepDurationHrs.setText(H + "hr " + M + "min");
                     binding.sleepScoreData.setText(String.format("%.1f %%", sleepScore));
                 });
     }
@@ -907,8 +873,8 @@ public class HomeFragment extends Fragment {
 
                         Calendar calendar = Calendar.getInstance();
 
-                        //calendar.add(Calendar.MINUTE, baseCycles * 90);
-                        calendar.add(Calendar.MINUTE, 1);
+                        calendar.add(Calendar.MINUTE, baseCycles * 90);
+                        //calendar.add(Calendar.MINUTE, 1);
 
                         intent.setClass(getContext(), AlarmReceiver.class);
                         String ringtoneUriStrSmart = prefs.getString("ringtone_uri", null);
