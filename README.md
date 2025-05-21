@@ -11,9 +11,8 @@ Elle a été testée sur un émulateur Pixel 6a – API 36 (Android 15 Preview).
 ##  Configuration requise
 
 1. Ouvrir le projet avec Android Studio.
-2. Générer automatiquement `local.properties` (lors de l'ouverture du projet).
-3. copier le fichier google-services.json dans le dossier :
-/app/google-services.json
+2. Générer automatiquement `local.properties` .
+3. Le fichier google-services.json est déjà inclus dans /app
 4. Cliquer sur `Sync Project with Gradle Files` dans Android Studio.
 5. Lancer l'application.
 
